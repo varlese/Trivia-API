@@ -1,8 +1,7 @@
-import os
+import os, random, sys, traceback
 from flask import Flask, request, abort, jsonify, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-import random
 
 from models import *
 
@@ -24,6 +23,7 @@ def paginate_questions(request, selection, page):
 def create_app(test_config=None):
   # create and configure the app
   app = Flask(__name__)
+  app.url_map.strict_slashes = False
   setup_db(app)
 
   # CORS app
@@ -52,16 +52,16 @@ def create_app(test_config=None):
       }), 200
 
   # Endpoint to handle GET requests for questions, paginated by QUESTIONS_PER_PAGE, showing all questions.
-  @app.route('/questions', methods=['GET'], strict_slashes=False)
-  @app.route('/questions/<int:page>', methods=['GET'], strict_slashes=False)
+  @app.route('/questions', methods=['GET'])
+  @app.route('/questions/<int:page>', methods=['GET'])
   def get_questions(page=False):
-    # Get categories for JSON return for frontend
+    # Get categories for JSON return for frontend.
     categories = Category.query.all()
     # Get all questions
     questions = Question.query.all()
     questions_displayed = paginate_questions(request, questions, page=page)
     if not questions_displayed:
-      abort(404)
+      return 404
 
     return jsonify({
       'questions': questions_displayed,
@@ -71,15 +71,33 @@ def create_app(test_config=None):
       'next_url': url_for('get_questions', page=page+1)
       }), 200
 
-  # Endpoint to handle GET request for questions, paginated by QUESTIONS_PER_PAGE and filtered by category.
+  # Endpoint to handle GET request for questions, paginated by QUESTIONS_PER_PAGE and filtered by category ID.
   # Uses paginate_questions for the pagination.
-  @app.route('/categories/<category>/questions', methods=['GET'], strict_slashes=False)
-  @app.route('/categories/<category>/questions/<int:page>', methods=['GET'], strict_slashes=False)
+  @app.route('/categories/<category>/questions', methods=['GET'])
+  @app.route('/categories/<category>/questions/<int:page>', methods=['GET'])
   def get_questions_by_category(category, page=False):
-    questions = Question.query.filter_by(category=category).all()
+    category_data = False
+
+    # Checks for valid category ID.
+    if category.isnumeric():
+      category_data = Category.query.get(category)
+      category_id = category
+
+    # Checks for category type and converts to ID if found.
+    if not category_data:
+      category_data = Category.query.filter_by(type=category).first()
+      category_id = category_data.id
+
+    # If category is not found, returns error message.
+    if not category_data:
+      return 422
+
+    questions = Question.query.filter_by(category=category_id).all()
     questions_displayed = paginate_questions(request, questions, page=page)
+
+    # If page number doesn't exist, returns 404.
     if not questions_displayed:
-      abort(404)
+      return 404
 
     return jsonify({
       'questions': questions_displayed,
@@ -95,12 +113,34 @@ def create_app(test_config=None):
   Clicking on the page numbers should update the questions. 
   '''
 
+  # Endpoint to handle DELETE requests using question ID.
   @app.route('/delete/<int:quest_id>', methods=['DELETE'])
   def delete_questions(quest_id):
-    question_to_delete = Question.query.filter_by(id = quest_id)
-    question_to_delete.delete()
-    db.session.commit()
-    return 'OK'
+    # Checks that question ID is not 0.
+    if not quest_id:
+      return 422
+
+    question_to_delete = Question.query.get(quest_id)
+    # Checks if question ID exists.
+    if not question_to_delete:
+      return 404
+
+    try:
+      question_to_delete.delete()
+      db.session.commit()
+
+    except:
+      db.session.rollback()
+      exc_type, exc_value, exc_traceback = sys.exc_info()
+
+      print("*** print_exception:")
+      traceback.print_exception(exc_type, exc_value, exc_traceback, limit = 2, file = sys.stdout)
+      return 418
+
+    return jsonify({
+      'id': quest_id,
+      'success': True
+      }), 200
 
   '''
   TEST: When you click the trash icon next to a question, the question will be removed.
@@ -167,11 +207,33 @@ def create_app(test_config=None):
   and shown whether they were correct or not. 
   '''
 
-  '''
-  @TODO: 
-  Create error handlers for all expected errors 
-  including 404 and 422. 
-  '''
+  #Error handler for objects that cannot be found in the database.
+  @app.errorhandler(404)
+  def not_found(error):
+    return jsonify({
+      "success": False, 
+      "error": 404,
+      "message": "Item not found."
+      }), 404
+
+  #Error handler for total fails. 
+  @app.errorhandler(418)
+  def teapot(error):
+    return jsonify({
+      "success": False, 
+      "error": 418,
+      "message": "Server refuses to brew coffee because it's a teapot"
+      }), 418
+
+  #Error handler for requests that cannot be processed.
+  @app.errorhandler(422)
+  def unprocessable(error):
+    return jsonify({
+      "success": False, 
+      "error": 422,
+      "message": "Request could not be processed."
+      }), 422
+
   
   return app
 
