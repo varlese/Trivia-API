@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import random
 
-from models import setup_db, Question, Category
+from models import *
 
 # Set up a function to paginate trivia questions with 10 results per page.
 # Returns the list of 10 questions. 
@@ -95,24 +95,54 @@ def create_app(test_config=None):
   Clicking on the page numbers should update the questions. 
   '''
 
-  '''
-  @TODO: 
-  Create an endpoint to DELETE question using a question ID. 
+  @app.route('/delete/<int:quest_id>', methods=['DELETE'])
+  def delete_questions(quest_id):
+    question_to_delete = Question.query.filter_by(id = quest_id)
+    question_to_delete.delete()
+    db.session.commit()
+    return 'OK'
 
+  '''
   TEST: When you click the trash icon next to a question, the question will be removed.
   This removal will persist in the database and when you refresh the page. 
   '''
 
-  '''
-  @TODO: 
-  Create an endpoint to POST a new question, 
-  which will require the question and answer text, 
-  category, and difficulty score.
+  @app.route('/add', methods=['POST'])
+  def add_questions():
+    new_question = Question(
+      question = request.args.get('question'),
+      answer = request.args.get('answer'),
+      category = request.args.get('category'),
+      difficulty = request.args.get('difficulty')
+    )
+    db.session.add(new_question)
+    # question_id = new_question.id
+    db.session.commit()
+    
+    return 'OK'
 
+  '''
   TEST: When you submit a question on the "Add" tab, 
   the form will clear and the question will appear at the end of the last page
   of the questions list in the "List" tab.  
   '''
+
+  @app.route('/search/<term>', methods=['POST'])
+  def find_questions(term):
+    search_term = request.args.get('term')
+    print(search_term)
+    # search_data = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
+    return 'OK'
+
+    # if not search_data:
+    #   abort(404)
+
+    # return jsonify({
+    #   'questions': search_data,
+    #   'categories': [category.format() for category in categories],
+    #   'success': True,
+    #   'total_questions': len(questions)
+    #   }), 200
 
   '''
   @TODO: 
@@ -124,16 +154,6 @@ def create_app(test_config=None):
   only question that include that string within their question. 
   Try using the word "title" to start. 
   '''
-
-  '''
-  @TODO: 
-  Create a GET endpoint to get questions based on category. 
-
-  TEST: In the "List" tab / main screen, clicking on one of the 
-  categories in the left column will cause only questions of that 
-  category to be shown. 
-  '''
-
 
   '''
   @TODO: 
