@@ -5,6 +5,10 @@ from flask_cors import CORS
 
 from models import *
 
+# ----------------------------------------------------------------------
+# Utils
+# ----------------------------------------------------------------------
+
 # Set up a function to paginate trivia questions with 10 results per page.
 # Returns the list of 10 questions. 
 QUESTIONS_PER_PAGE = 10
@@ -19,6 +23,19 @@ def paginate_questions(request, selection, page):
   questions_displayed = questions[start:end]
 
   return questions_displayed
+
+# Set up function to validate if difficulty level is valid.
+
+def is_valid_difficulty(difficulty):
+  difficulty = int(difficulty)
+  if difficulty >= 1 or difficulty <= 5:
+    return True
+  else:
+    return False
+
+# ----------------------------------------------------------------------
+# Config
+# ----------------------------------------------------------------------
 
 def create_app(test_config=None):
   # create and configure the app
@@ -42,6 +59,10 @@ def create_app(test_config=None):
       )
       return response
 
+# ----------------------------------------------------------------------
+# Endpoints
+# ----------------------------------------------------------------------
+
   # Endpoint to handle GET requests for all available categories.
   @app.route('/categories', methods=['GET'])
   def get_categories():
@@ -61,7 +82,7 @@ def create_app(test_config=None):
     questions = Question.query.all()
     questions_displayed = paginate_questions(request, questions, page=page)
     if not questions_displayed:
-      return 404
+      abort(404)
 
     return jsonify({
       'questions': questions_displayed,
@@ -90,14 +111,14 @@ def create_app(test_config=None):
 
     # If category is not found, returns error message.
     if not category_data:
-      return 422
+      abort(422)
 
     questions = Question.query.filter_by(category=category_id).all()
     questions_displayed = paginate_questions(request, questions, page=page)
 
     # If page number doesn't exist, returns 404.
     if not questions_displayed:
-      return 404
+      abort(404)
 
     return jsonify({
       'questions': questions_displayed,
@@ -118,12 +139,12 @@ def create_app(test_config=None):
   def delete_questions(quest_id):
     # Checks that question ID is not 0.
     if not quest_id:
-      return 422
+      abort(422)
 
     question_to_delete = Question.query.get(quest_id)
     # Checks if question ID exists.
     if not question_to_delete:
-      return 404
+      abort(404)
 
     try:
       question_to_delete.delete()
@@ -135,7 +156,7 @@ def create_app(test_config=None):
 
       print("*** print_exception:")
       traceback.print_exception(exc_type, exc_value, exc_traceback, limit = 2, file = sys.stdout)
-      return 418
+      abort(418)
 
     return jsonify({
       'id': quest_id,
@@ -147,19 +168,74 @@ def create_app(test_config=None):
   This removal will persist in the database and when you refresh the page. 
   '''
 
+  # Endpoint to add new questions to the database.
   @app.route('/add', methods=['POST'])
   def add_questions():
+    question = request.args.get('question'),
+    answer = request.args.get('answer'),
+    category = request.args.get('category'),
+    difficulty = request.args.get('difficulty')
+
+    # Checks for values for each required field, otherwise throws a 422.
+    if not question:
+      abort(422)
+    if not answer:
+      abort(422)
+    if not category:
+      abort(422)
+    if not difficulty:
+      abort(422)
+
+    # Values are returned as a tuple - ensures we're only comparing the first value.
+    category = category[0]
+    category_data = False
+    # Checks for valid category ID.
+    if category.isnumeric():
+      category_data = Category.query.get(category)
+      category_id = category
+
+    # Checks for category type and converts to ID if found.
+    if not category_data:
+      category_data = Category.query.filter_by(type=category).first()
+      category_id = category_data.id
+
+    # If category is not found, returns error message.
+    if not category_data:
+      abort(422)
+
+    if not is_valid_difficulty(difficulty):
+      abort(422)
+
     new_question = Question(
-      question = request.args.get('question'),
-      answer = request.args.get('answer'),
-      category = request.args.get('category'),
-      difficulty = request.args.get('difficulty')
+      question = question,
+      answer = answer,
+      category = category_id,
+      difficulty = difficulty
     )
-    db.session.add(new_question)
-    # question_id = new_question.id
-    db.session.commit()
-    
-    return 'OK'
+
+    try:
+      db.session.add(new_question)
+      db.session.commit()
+      data = {
+        'id': new_question.id,
+        'question': new_question.question,
+        'answer': new_question.answer,
+        'category': new_question.category,
+        'difficulty': new_question.difficulty
+      }
+
+    except:
+      db.session.rollback()
+      exc_type, exc_value, exc_traceback = sys.exc_info()
+
+      print("*** print_exception:")
+      traceback.print_exception(exc_type, exc_value, exc_traceback, limit = 2, file = sys.stdout)
+      abort(418)
+
+    return jsonify({
+      'question': data,
+      'success': True
+      }), 200
 
   '''
   TEST: When you submit a question on the "Add" tab, 
@@ -167,29 +243,25 @@ def create_app(test_config=None):
   of the questions list in the "List" tab.  
   '''
 
-  @app.route('/search/<term>', methods=['POST'])
-  def find_questions(term):
-    search_term = request.args.get('term')
-    print(search_term)
-    # search_data = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
-    return 'OK'
+  # Endpoint to handle search requests.
+  @app.route('/search/<search_term>', methods=['POST'])
+  @app.route('/search/<search_term>/<int:page>', methods=['POST'])
+  def find_questions(search_term, page=False):
+    search_data = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
+    displayed_results = paginate_questions(request, search_data, page=page)
 
-    # if not search_data:
-    #   abort(404)
+    if not displayed_results:
+      abort(404)
 
-    # return jsonify({
-    #   'questions': search_data,
-    #   'categories': [category.format() for category in categories],
-    #   'success': True,
-    #   'total_questions': len(questions)
-    #   }), 200
+    return jsonify({
+      'results': displayed_results,
+      'success': True,
+      'total_questions': len(search_data),
+      'next_url': url_for('find_questions', search_term=search_term, page=page+1)
+    }), 200
+
 
   '''
-  @TODO: 
-  Create a POST endpoint to get questions based on a search term. 
-  It should return any questions for whom the search term 
-  is a substring of the question. 
-
   TEST: Search by any phrase. The questions list will update to include 
   only question that include that string within their question. 
   Try using the word "title" to start. 
