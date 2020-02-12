@@ -67,9 +67,12 @@ def create_app(test_config=None):
   @app.route('/categories', methods=['GET'])
   def get_categories():
       categories = Category.query.all()
+      if not categories:
+        abort(404)
+
       return jsonify({
         'success': True,
-        'categories': [category.format() for category in categories],
+        'categories': {category.id:category.type for category in categories},
       }), 200
 
   # Endpoint to handle GET requests for questions, paginated by QUESTIONS_PER_PAGE, showing all questions.
@@ -86,7 +89,7 @@ def create_app(test_config=None):
 
     return jsonify({
       'questions': questions_displayed,
-      'categories': [category.format() for category in categories],
+      'categories': {category.id:category.type for category in categories},
       'success': True,
       'total_questions': len(questions),
       'next_url': url_for('get_questions', page=page+1)
@@ -111,7 +114,7 @@ def create_app(test_config=None):
 
     # If category is not found, returns error message.
     if not category_data:
-      abort(422)
+      abort(400)
 
     questions = Question.query.filter_by(category=category_id).all()
     questions_displayed = paginate_questions(request, questions, page=page)
@@ -127,19 +130,12 @@ def create_app(test_config=None):
       'next_url': url_for('get_questions_by_category', category=category, page=page+1)
       }), 200
 
-  '''
-  TEST: At this point, when you start the application
-  you should see questions and categories generated,
-  ten questions per page and pagination at the bottom of the screen for three pages.
-  Clicking on the page numbers should update the questions. 
-  '''
-
   # Endpoint to handle DELETE requests using question ID.
-  @app.route('/delete/<int:quest_id>', methods=['DELETE'])
+  @app.route('/questions/<int:quest_id>', methods=['DELETE'])
   def delete_questions(quest_id):
     # Checks that question ID is not 0.
     if not quest_id:
-      abort(422)
+      abort(400)
 
     question_to_delete = Question.query.get(quest_id)
     # Checks if question ID exists.
@@ -156,35 +152,31 @@ def create_app(test_config=None):
 
       print("*** print_exception:")
       traceback.print_exception(exc_type, exc_value, exc_traceback, limit = 2, file = sys.stdout)
-      abort(418)
+      abort(500)
 
     return jsonify({
       'id': quest_id,
       'success': True
       }), 200
 
-  '''
-  TEST: When you click the trash icon next to a question, the question will be removed.
-  This removal will persist in the database and when you refresh the page. 
-  '''
-
   # Endpoint to add new questions to the database.
-  @app.route('/add', methods=['POST'])
+  @app.route('/questions', methods=['POST'])
   def add_questions():
-    question = request.args.get('question'),
-    answer = request.args.get('answer'),
-    category = request.args.get('category'),
-    difficulty = request.args.get('difficulty')
+    body = request.get_json()
+    question = body['question'],
+    answer = body['answer'],
+    category = body['category'],
+    difficulty = body['difficulty']
 
-    # Checks for values for each required field, otherwise throws a 422.
+    # Checks for values for each required field, otherwise throws a 400.
     if not question:
-      abort(422)
+      abort(400)
     if not answer:
-      abort(422)
+      abort(400)
     if not category:
-      abort(422)
+      abort(400)
     if not difficulty:
-      abort(422)
+      abort(400)
 
     # Values are returned as a tuple - ensures we're only comparing the first value.
     category = category[0]
@@ -201,7 +193,7 @@ def create_app(test_config=None):
 
     # If category is not found, returns error message.
     if not category_data:
-      abort(422)
+      abort(400)
 
     if not is_valid_difficulty(difficulty):
       abort(422)
@@ -230,60 +222,53 @@ def create_app(test_config=None):
 
       print("*** print_exception:")
       traceback.print_exception(exc_type, exc_value, exc_traceback, limit = 2, file = sys.stdout)
-      abort(418)
+      abort(500)
 
     return jsonify({
       'question': data,
       'success': True
       }), 200
 
-  '''
-  TEST: When you submit a question on the "Add" tab, 
-  the form will clear and the question will appear at the end of the last page
-  of the questions list in the "List" tab.  
-  '''
-
   # Endpoint to handle search requests.
-  @app.route('/search/<search_term>', methods=['POST'])
-  @app.route('/search/<search_term>/<int:page>', methods=['POST'])
-  def find_questions(search_term, page=False):
+  @app.route('/search', methods=['POST'])
+  def find_questions():
+    body = request.get_json()
+    search_term = body['searchTerm']
     search_data = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
-    displayed_results = paginate_questions(request, search_data, page=page)
 
-    if not displayed_results:
+    if not search_data:
       abort(404)
 
     return jsonify({
-      'results': displayed_results,
+      'questions': [data.format() for data in search_data],
       'success': True,
-      'total_questions': len(search_data),
-      'next_url': url_for('find_questions', search_term=search_term, page=page+1)
+      'totalQuestions': len(search_data)
     }), 200
-
-
-  '''
-  TEST: Search by any phrase. The questions list will update to include 
-  only question that include that string within their question. 
-  Try using the word "title" to start. 
-  '''
 
   # Endpoint to play quiz that filters by category and previous questions that have been answered. 
   @app.route('/quizzes', methods=['POST'])
   def play_quiz():
     body = request.get_json()
-    category = int(body['category'])
+    category = body['category']
+    if isinstance(category, dict):
+      category_id = int(category['id'])
+    else:
+      category_id = int(category)
     previous_questions = body['previous_questions']
 
-    quiz_category = Category.query.get(category)
-    if not quiz_category:
-      abort(404)
+    questions = Question.query
 
-    # Breaking up questions query to make the code cleaner. 
-    questions = Question.query.filter_by(category=category)
+    if category_id is not 0:
+      quiz_category = Category.query.get(category_id)
+
+      if not quiz_category:
+        abort(404)
+
+      questions = questions.filter_by(category=category_id)
+
     if previous_questions:
       questions = questions.filter(Question.id.notin_(previous_questions))
     questions = questions.all()
-    print(questions)
     if not questions:
       abort(404)
 
@@ -294,12 +279,18 @@ def create_app(test_config=None):
       'success': True
     }), 200
 
+# ----------------------------------------------------------------------
+# Error handlers
+# ----------------------------------------------------------------------
 
-  '''
-  TEST: In the "Play" tab, after a user selects "All" or a category,
-  one question at a time is displayed, the user is allowed to answer
-  and shown whether they were correct or not. 
-  '''
+  #Error handler for malformed requests.
+  @app.errorhandler(400)
+  def bad_request(error):
+    return jsonify({
+      "success": False, 
+      "error": 400,
+      "message": "Bad request."
+      }), 400
 
   #Error handler for objects that cannot be found in the database.
   @app.errorhandler(404)
@@ -310,15 +301,6 @@ def create_app(test_config=None):
       "message": "Item not found."
       }), 404
 
-  #Error handler for total fails. 
-  @app.errorhandler(418)
-  def teapot(error):
-    return jsonify({
-      "success": False, 
-      "error": 418,
-      "message": "Server refuses to brew coffee because it's a teapot"
-      }), 418
-
   #Error handler for requests that cannot be processed.
   @app.errorhandler(422)
   def unprocessable(error):
@@ -328,7 +310,17 @@ def create_app(test_config=None):
       "message": "Request could not be processed."
       }), 422
 
-  
-  return app
+  #Error handler for when the server fails. 
+  @app.errorhandler(500)
+  def internal_server_error(error):
+    return jsonify({
+      "success": False, 
+      "error": 500,
+      "message": "Internal Server Error."
+      }), 500
 
-    
+# ----------------------------------------------------------------------
+# Runs app
+# ----------------------------------------------------------------------
+
+  return app
