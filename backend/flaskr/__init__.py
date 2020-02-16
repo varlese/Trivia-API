@@ -163,26 +163,25 @@ def create_app(test_config=None):
   @app.route('/questions', methods=['POST'])
   def add_questions():
     body = request.get_json()
-    question = body['question'],
-    answer = body['answer'],
-    category = body['category'],
-    difficulty = body['difficulty']
 
     # Checks for values for each required field, otherwise throws a 400.
-    if not question:
+    if not body['question']:
       abort(400)
-    if not answer:
+    if not body['answer']:
       abort(400)
-    if not category:
+    if not body['category']:
       abort(400)
-    if not difficulty:
+    if not body['difficulty']:
       abort(400)
 
-    # Values are returned as a tuple - ensures we're only comparing the first value.
-    category = category[0]
+    question = body['question']
+    answer = body['answer']
+    category = body['category']
+    difficulty = body['difficulty']
+
     category_data = False
     # Checks for valid category ID.
-    if category.isnumeric():
+    if isinstance(category, int) or category.isnumeric():
       category_data = Category.query.get(category)
       category_id = category
 
