@@ -28,7 +28,7 @@ def paginate_questions(request, selection, page):
 
 def is_valid_difficulty(difficulty):
   difficulty = int(difficulty)
-  if difficulty >= 1 or difficulty <= 5:
+  if difficulty >= 1 and difficulty <= 5:
     return True
   else:
     return False
@@ -165,13 +165,13 @@ def create_app(test_config=None):
     body = request.get_json()
 
     # Checks for values for each required field, otherwise throws a 400.
-    if not body['question']:
+    if 'question' not in body:
       abort(400)
-    if not body['answer']:
+    if 'answer' not in body:
       abort(400)
-    if not body['category']:
+    if 'category' not in body:
       abort(400)
-    if not body['difficulty']:
+    if 'difficulty' not in body:
       abort(400)
 
     question = body['question']
