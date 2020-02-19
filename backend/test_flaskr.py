@@ -198,7 +198,65 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data['error'], 404)
         self.assertFalse(data['success'])
         
-    # /quizzes', methods=['POST']
+    def test_should_get_random_question_from_art(self):
+        quiz_category = 4
+        quizzes_request_data = {
+            "category": quiz_category
+        }
+        res = self.client().post('/quizzes', data=json.dumps(quizzes_request_data), headers={'Content-Type': 'application/json'})
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        self.assertEqual(data['question']['category'], quiz_category)
+
+        requested_question = Question.query.get(data['question']['id'])
+        self.assertEqual(data['question']['category'], requested_question.category)
+
+    def test_should_not_return_previous_questions_passed(self):
+        quiz_category = 4
+        previous_questions_query = Question.query.filter_by(category=quiz_category).all()
+        previous_questions = []
+
+        for question in previous_questions_query:
+            previous_questions.append(question.id)
+
+        last_question = previous_questions.pop()
+
+        quizzes_request_data = {
+            "category": quiz_category,
+            "previous_questions": previous_questions
+        }
+
+        res = self.client().post('/quizzes', data=json.dumps(quizzes_request_data), headers={'Content-Type': 'application/json'})
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['success'])
+
+        requested_question = Question.query.get(data['question']['id'])
+        self.assertEqual(data['question']['id'], last_question)
+
+    def test_should_not_return_any_more_questions(self):
+        quiz_category = 4
+        previous_questions_query = Question.query.filter_by(category=quiz_category).all()
+        previous_questions = []
+
+        for question in previous_questions_query:
+            previous_questions.append(question.id)
+
+        quizzes_request_data = {
+            "category": quiz_category,
+            "previous_questions": previous_questions
+        }
+
+        res = self.client().post('/quizzes', data=json.dumps(quizzes_request_data), headers={'Content-Type': 'application/json'})
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 404)
+        self.assertTrue(data['error'], 404)
+        self.assertFalse(data['success'])
 
 
 # Make the tests conveniently executable

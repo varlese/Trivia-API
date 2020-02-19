@@ -159,7 +159,6 @@ GET '/questions', '/questions/<int:page>'
 POST '/questions
 - Posts a new question to the database, including the question, the question answer, difficulty level, and category. ID is automatically assigned upon assertion.
 - Request arguments: Question, answer, category (integer or string), and difficulty level (integer, levels 1-5). All arguments are required and must be passed in the body as a JSON object.
-- Returns: A dictionary object that includes the question, answer, category, difficulty, and newly assigned question ID, as well as the status of the request.
 ```
 {
 	"answer": "Maya Angelou",
@@ -168,7 +167,7 @@ POST '/questions
 	"question": "Whose autobiography is entitled 'I Know Why the Caged Bird Sings'?"
 }
 ```
-Returns:
+- Returns: A dictionary object that includes the question, answer, category, difficulty, and newly assigned question ID, as well as the status of the request.
 ```
 {
 	"question": {
@@ -184,13 +183,12 @@ Returns:
 POST '/search'
 - Fetches any questions that include the search term in the body of the question.
 - Request arguments: Search tearm (string), which must be passed in the body as a JSON string. Required.
-- Returns: A dicitionary object that includes all relevant questions, including each question, question ID, question anwer, category, and difficulty.
 ```
 {
 	"searchTerm": "boxer"
 }
 ```
-Returns:
+- Returns: A dicitionary object that includes all relevant questions, including each question, question ID, question anwer, category, and difficulty.
 ```
 {
 	"questions": [
@@ -206,8 +204,31 @@ Returns:
 	"totalQuestions": 1
 }
 ```
+
 POST 'quizzes'
-- 
+- Fetches a random question from within a category, without repeating previously passed questions.
+- Request arguments: Category (optional). Category can be passed as either an integer or a string and must be passed as a JSON string.
+```
+{
+	"category": 3
+}
+```
+- Returns: A JSON object including the category, previous question list, and a question dictionary object. 
+```
+{
+    "category": 3,
+    "previous_questions": [],
+    "question": {
+        "answer": "The Palace of Versailles",
+        "category": 3,
+        "difficulty": 3,
+        "id": 14,
+        "question": "In which royal palace would you find the Hall of Mirrors?"
+    },
+    "success": true
+}
+```
+
 DELETE '/questions/<int:quest_id>'
 - Deletes a question in the database via the DELETE method and using the question id.
 - Request argument: Question id, included as a parameter following a forward slash (/).

@@ -253,7 +253,10 @@ def create_app(test_config=None):
       category_id = int(category['id'])
     else:
       category_id = int(category)
-    previous_questions = body['previous_questions']
+    if 'previous_questions' in body:
+      previous_questions = body['previous_questions']
+    else:
+      previous_questions = []
 
     questions = Question.query
 
